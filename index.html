@@ -116,21 +116,22 @@
 <script>
 const API_KEY = '$2a$10$ITkAOjPUtKTed.c2mDuK7uipApQyyowRaLA9M/DN6kbLI0WVKnqpi';
 const BIN_NAME = 'birthday-gifts-2025';
+const MAX_PER_PERSON = 2;
 let BIN_ID = "6a2c486bf5f4af5e29e7f765";
 
 const GIFTS = [
-  { id: 'g1',  name: 'Подарочная карта в кино',              icon: '🎬' },
-  { id: 'g2',  name: 'Подарочная карта в CandyPop',          icon: '🍬' },
-  { id: 'g3',  name: 'Коробка-сюрприз из CandyPop',          icon: '🎊' },
-  { id: 'g4',  name: 'SquishMallows — Fuzzy Mallard Duck',   icon: '🦆' },
-  { id: 'g5',  name: 'Игра «What Do You Meme?»',             icon: '😂' },
-  { id: 'g6',  name: 'Игрушка Fuggler (любая)',               icon: '🧸' },
-  { id: 'g7',  name: 'Подарочная карта в торговый центр',    icon: '🛍️' },
-  { id: 'g8',  name: 'Squishy Dumplings игрушка',            icon: '🥟' },
-  { id: 'g9',  name: 'Комплект для ванны (пена, шарики, гель)', icon: '🛁' },
-  { id: 'g10', name: 'Подарочная карта в GanBei',            icon: '🍜' },
-  { id: 'g11', name: 'Schylling Nee Doh Nice Cube',          icon: '🟩' },
-  { id: 'g12', name: 'Ролики',                                    icon: '⛸️' },
+  { id: 'g1',  name: 'Подарочная карта в кино',                      icon: '🎬' },
+  { id: 'g2',  name: 'Подарочная карта в CandyPop',                  icon: '🍬' },
+  { id: 'g3',  name: 'Коробка-сюрприз из CandyPop',                  icon: '🎊' },
+  { id: 'g4',  name: 'SquishMallows — Fuzzy Mallard Duck',           icon: '🦆' },
+  { id: 'g5',  name: 'Игра «What Do You Meme?» (на английском)',     icon: '😂' },
+  { id: 'g6',  name: 'Игрушка Fuggler (любая)',                       icon: '🧸' },
+  { id: 'g7',  name: 'Подарочная карта в торговый центр',            icon: '🛍️' },
+  { id: 'g8',  name: 'Squishy Dumplings игрушка',                    icon: '🥟' },
+  { id: 'g9',  name: 'Комплект для ванны (пена, шарики, гель)',      icon: '🛁' },
+  { id: 'g10', name: 'Подарочная карта в GanBei',                    icon: '🍜' },
+  { id: 'g11', name: 'Schylling Nee Doh Nice Cube',                  icon: '🟩' },
+  { id: 'g12', name: 'Ролики',                                        icon: '⛸️' },
 ];
 
 let bookings = {};
@@ -138,8 +139,11 @@ let currentGift = null;
 let isRelease = false;
 let lastUpdated = null;
 
+function countByName(name) {
+  return Object.values(bookings).filter(n => n.toLowerCase() === name.toLowerCase()).length;
+}
+
 async function apiGet() {
-  if (!BIN_ID) return null;
   const r = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
     headers: { 'X-Master-Key': API_KEY }
   });
@@ -149,30 +153,9 @@ async function apiGet() {
 }
 
 async function apiSet(data) {
-  if (!BIN_ID) {
-    // create bin
-    const r = await fetch('https://api.jsonbin.io/v3/b', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': API_KEY,
-        'X-Bin-Name': BIN_NAME,
-        'X-Bin-Private': 'false'
-      },
-      body: JSON.stringify(data)
-    });
-    if (!r.ok) throw new Error('create failed');
-    const d = await r.json();
-    BIN_ID = d.metadata.id;
-    localStorage.setItem('jsonbin_id', BIN_ID);
-    return;
-  }
   const r = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': API_KEY
-    },
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY },
     body: JSON.stringify(data)
   });
   if (!r.ok) throw new Error('put failed');
@@ -181,15 +164,10 @@ async function apiSet(data) {
 async function loadState() {
   try {
     const data = await apiGet();
-    if (data) {
-      bookings = data.bookings || {};
-    } else {
-      bookings = {};
-    }
+    bookings = data ? (data.bookings || {}) : {};
     lastUpdated = new Date();
     render();
   } catch(e) {
-    // bin not created yet — render empty
     bookings = {};
     render();
   }
@@ -246,7 +224,7 @@ function openModal(giftId) {
     btn.className = 'btn btn-release';
     btn.textContent = '❌ Отменить бронь';
   } else {
-    document.getElementById('mDesc').textContent = 'Напиши своё имя, чтобы забронировать';
+    document.getElementById('mDesc').textContent = 'Напиши своё имя, чтобы забронировать (можно взять до 2 подарков)';
     input.style.display = 'block';
     input.value = '';
     input.className = 'name-input';
@@ -275,6 +253,10 @@ async function confirmAction() {
       errEl.textContent = 'Введи своё имя!';
       return;
     }
+    if (countByName(name) >= MAX_PER_PERSON) {
+      errEl.textContent = `Можно взять максимум ${MAX_PER_PERSON} подарка!`;
+      return;
+    }
     bookings[currentGift.id] = name;
   } else {
     delete bookings[currentGift.id];
@@ -291,7 +273,6 @@ async function confirmAction() {
     closeModal();
   } catch(e) {
     errEl.textContent = 'Ошибка сохранения, попробуй ещё раз';
-    // revert
     if (!isRelease) delete bookings[currentGift.id];
     else bookings[currentGift.id] = input.value.trim();
     btn.disabled = false;
@@ -307,7 +288,6 @@ document.getElementById('modal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
-// Initial load + polling
 loadState();
 setInterval(loadState, 5000);
 </script>
